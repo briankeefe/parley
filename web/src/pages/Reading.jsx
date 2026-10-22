@@ -286,7 +286,7 @@ function MeetingNav({ meetings, id }) {
 }
 
 /* ── note document ────────────────────────────────────────────────────── */
-function Note({ data, todos, guildId, meetings, refetchTodos, onReload }) {
+function Note({ data, todos, meetings, refetchTodos, onReload }) {
   const { meeting, summary, attendees, utterances, retry } = data;
   const notes = summary?.notes;
   const duration = fmtDuration(meeting.started_at, meeting.ended_at);
@@ -411,7 +411,7 @@ function Note({ data, todos, guildId, meetings, refetchTodos, onReload }) {
       )}
 
       <Transcript utterances={utterances ?? []} />
-      {guildId && <AskBox guildId={guildId} meetingId={meeting.id} />}
+      <AskBox guildId={meeting.guild_id} meetingId={meeting.id} />
       <MeetingNav meetings={meetings} id={meeting.id} />
     </article>
   );
@@ -484,7 +484,7 @@ export default function Reading() {
 
   return (
     <div className="px-6 md:px-8 py-7">
-      <Note key={data.meeting.id} data={data} todos={todos} guildId={guildId} meetings={meetings} refetchTodos={loadTodos} onReload={reloadMeeting} />
+      <Note key={data.meeting.id} data={data} todos={todos} meetings={meetings} refetchTodos={loadTodos} onReload={reloadMeeting} />
     </div>
   );
 }

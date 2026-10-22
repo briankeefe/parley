@@ -85,11 +85,14 @@ function Gate() {
   if (user?.mustChangePassword) return <ForcePasswordChange />;
   if (user && !user.isAdmin) {
     return (
-      <div className="min-h-screen grid place-items-center bg-bg text-ink p-6">
-        <div className="card p-7 max-w-[400px] w-full text-center">
-          <h1 className="font-display text-lg font-extrabold mb-1">Admin access required</h1>
-          <p className="text-sm text-muted mb-5">This dashboard is restricted to instance administrators. Contact your administrator for access.</p>
-          <button onClick={logout} className="btn btn-primary !py-2.5 w-full justify-center">Sign out</button>
+      <div className="min-h-screen bg-bg text-ink p-6">
+        <div className="mx-auto max-w-[720px]">
+          <div className="card p-7 text-center">
+            <h1 className="font-display text-lg font-extrabold mb-1">Admin access required</h1>
+            <p className="text-sm text-muted mb-5">Guild data and controls are restricted to instance administrators. You can manage your password below.</p>
+            <button onClick={logout} className="btn btn-primary !py-2.5 w-full justify-center">Sign out</button>
+          </div>
+          <Account />
         </div>
       </div>
     );

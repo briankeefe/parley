@@ -13,11 +13,14 @@ Retain the local setup log until onboarding is complete. If it is lost, an exist
 The dashboard is an **instance administration interface**, not a Discord-member portal. There is no mapping between website accounts and Discord identities and no per-guild grants in this model.
 
 - Instance admins may access **all guilds** and their meetings, transcripts, exports, todos, search, statistics and live attendance, and control recordings, retries, configuration, bot/sidecar lifecycle and credentials.
-- Non-admin accounts may log in/out, inspect their own session, and change their own password. Every dashboard data/control endpoint denies them. The UI shows an admin-access-required screen rather than mounting data providers.
+- Non-admin accounts may log in/out, inspect their own session, and change their own password. Every dashboard data/control endpoint denies them. The UI retains the existing Account/password form outside system, guild and live-data providers, alongside the admin-access notice and sign-out control.
 - New data/control routes inherit the admin gate at the API router boundary. Missing authentication middleware never implies admin permission. Role changes take effect on the next request, including existing sessions.
 - A guild-qualified meeting request must name the meeting's actual guild, even for admins. Merge sources must share the target's guild.
+- Meeting Ask requests use the fetched meeting's guild, not the independently selected guild. Saved meeting links, refreshes and selector changes therefore preserve valid admin Ask requests without relaxing server-side mismatch rejection.
 
 Grant admin only to trusted instance operators: it is not a read-only role. Non-admin data access from older versions is intentionally removed. Cookie HttpOnly/SameSite/Secure behavior, same-origin CSRF checks, rate limiting, scrypt, loopback default binding, localhost-only Compose publication, private sidecar networking and the non-root bot runtime remain in place. Use TLS behind a correctly configured trusted reverse proxy for remote access.
+
+Frontend interaction regressions run with `npm --prefix web test` after installing the frontend dependencies. They mount the actual React components and exercise password changes, session rotation, saved-link Ask/refresh/selector transitions, and negative authorization controls against an ephemeral loopback server with in-memory SQLite and the fake summarizer. React test renderer is development-only and matches React 18.3.1; no graphical browser or external service is required. The backend suite remains `npm test`.
 
 ## Dependency hardening
 

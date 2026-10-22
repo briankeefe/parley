@@ -107,7 +107,6 @@ export function attachUser(users) {
   return (req, _res, next) => {
     const token = readCookie(req, COOKIE);
     req.sessionToken = token ?? null;
-    req.authResolved = true; // marks that the auth stack ran (see requireAdmin)
     req.user = token ? users.getSessionUser(token) : null;
     next();
   };
@@ -120,24 +119,16 @@ export function requireAuth(_users) {
   };
 }
 
-// Gates a route to admin users only. When the auth stack ran (attachUser set
-// req.authResolved) a missing or non-admin user is rejected — fail closed. Only
-// when auth was never wired in front (the standalone/test server that mounts
-// apiRouter bare) is it permissive, since there's no auth to enforce there.
+// Admin-only dashboard boundary. A missing auth stack must never grant access.
 export function requireAdmin(req, res, next) {
-  if (req.authResolved && (!req.user || !req.user.isAdmin)) {
+  if (!req.user?.isAdmin) {
     return res.status(403).json({ error: 'Admin access required.' });
   }
   next();
 }
 
-// Blocks the data/system API while the logged-in account still uses its seeded
-// default password (must_change_password). Auth routes (login/logout/me/password)
-// are mounted *before* this, so the user can still authenticate and set a real
-// password — they just can't touch anything else until they do. Without this, a
-// reachable instance with the default admin/admin is fully operable by anyone.
-// Permissive when no user is attached (standalone/test server), mirroring
-// requireAdmin.
+// Blocks data and management while a bootstrap/legacy account requires rotation.
+// Only login/logout/me and the account's own password change precede this gate.
 export function requirePasswordChanged(_users) {
   return (req, res, next) => {
     if (req.user && req.user.mustChangePassword) {
@@ -203,8 +194,8 @@ export function authRouter({ users, now = () => Date.now(), loginLimiter = creat
   // Current user (or null). Drives the frontend's auth gate; never 401s.
   // `authEnabled: true` tells the client this server enforces login (older
   // servers without this route make the client fall back to open mode).
-  // `defaultPasswordActive` lets the login screen show the admin/admin hint only
-  // while it's actually true, instead of advertising it to every visitor.
+  // `defaultPasswordActive` indicates pending bootstrap/password rotation;
+  // bootstrap credentials are delivered locally, never through this endpoint.
   r.get('/auth/me', (req, res) => {
     res.json({
       authEnabled: true,
@@ -214,7 +205,7 @@ export function authRouter({ users, now = () => Date.now(), loginLimiter = creat
   });
 
   // Change your own password. Requires the current password unless the account
-  // is flagged must_change_password (the seeded default admin's first change).
+  // is flagged must_change_password (bootstrap or legacy credential rotation).
   // On success every other session for this user is revoked (a password change
   // is the response to a suspected compromise) and the current request gets a
   // fresh session cookie so the user stays logged in here.
@@ -239,6 +230,7 @@ export function authRouter({ users, now = () => Date.now(), loginLimiter = creat
   });
 
   // ── User management (admin) ─────────────────────────────────────────────────
+  r.use('/users', requireAuth(users), requirePasswordChanged(users), requireAdmin);
   r.get('/users', requireAuth(users), requireAdmin, (_req, res) => {
     res.json({ users: users.listUsers() });
   });

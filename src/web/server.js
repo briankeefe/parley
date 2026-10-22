@@ -18,10 +18,8 @@ export function createWebServer({ db, bot = null, client = null, sidecar = null 
   app.set('trust proxy', process.env.TRUSTED_PROXY || 'loopback');
   app.use(express.json());
 
-  // Auth: seed users (default admin on first run) and resolve the session
-  // cookie for every request. Login/logout/me/password are public (or self-only)
-  // and mounted first; everything else under /api needs a session, a same-origin
-  // request (CSRF guard), and an account that has moved off the default password.
+  // Resolve sessions before both routers. Auth self-service stays available;
+  // user management gates itself, and the data router is globally admin-only.
   const users = installUsers(db);
   app.use(attachUser(users));
   app.use('/api', sameOrigin);

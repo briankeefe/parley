@@ -12,17 +12,6 @@ test('hashPassword + verifyPassword round-trips and rejects wrong passwords', ()
   assert.equal(verifyPassword('hunter2', 'garbage'), false);
 });
 
-test('installUsers seeds a default admin / admin on first run', () => {
-  const db = openDb(':memory:');
-  const users = installUsers(db);
-  assert.equal(users.countUsers(), 1);
-  const admin = users.authenticate('admin', 'admin');
-  assert.ok(admin);
-  assert.equal(admin.isAdmin, true);
-  assert.equal(admin.mustChangePassword, true);
-  // Wrong password fails.
-  assert.equal(users.authenticate('admin', 'wrong'), null);
-});
 
 test('installUsers does not duplicate the admin on re-install', () => {
   const db = openDb(':memory:');
@@ -35,7 +24,8 @@ test('installUsers does not duplicate the admin on re-install', () => {
 test('username lookup is case-insensitive', () => {
   const db = openDb(':memory:');
   const users = installUsers(db);
-  assert.ok(users.authenticate('ADMIN', 'admin'));
+  users.setPassword(users.getUserByUsername('admin').id, 'test-password');
+  assert.ok(users.authenticate('ADMIN', 'test-password'));
 });
 
 test('createUser enforces unique usernames', () => {
@@ -98,4 +88,24 @@ test('defaultPasswordActive is true for the seeded admin, false after change', (
   const admin = users.getUserByUsername('admin');
   users.setPassword(admin.id, 'a-real-password');
   assert.equal(users.defaultPasswordActive(), false);
+});
+
+test('legacy admin/admin is replaced once and its sessions are revoked; chosen passwords survive reinstall', () => {
+  const db = openDb(':memory:');
+  const users = installUsers(db, { onBootstrap: () => {} });
+  const admin = users.getUserByUsername('admin');
+  users.setPassword(admin.id, 'admin');
+  db.sql.prepare('UPDATE users SET must_change_password = 1 WHERE id = ?').run(admin.id);
+  const { token } = users.createSession(admin.id);
+  let bootstrap;
+  installUsers(db, { onBootstrap: password => { bootstrap = password; } });
+  assert.equal(users.authenticate('admin', 'admin'), null);
+  assert.equal(users.getSessionUser(token), null);
+  assert.equal(users.authenticate('admin', bootstrap).mustChangePassword, true);
+  installUsers(db, { onBootstrap: () => assert.fail('must not rotate again') });
+  users.setPassword(admin.id, 'chosen-password');
+  installUsers(db, { onBootstrap: () => assert.fail('must preserve chosen password') });
+  assert.equal(users.authenticate('admin', bootstrap), null);
+  assert.equal(users.authenticate('admin', 'chosen-password').mustChangePassword, false);
+  db.sql.close();
 });

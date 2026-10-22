@@ -5,9 +5,8 @@
 // tokens stored server-side and referenced by an httpOnly cookie. No JWTs, no
 // external auth service — everything lives in the same SQLite db as meetings.
 //
-// On first run a default `admin` / `admin` account is seeded so a fresh
-// self-hoster can log in immediately; the UI nudges them to change it. Admins
-// can add more users (email + password); any user can change their own password.
+// First-run admin credentials are random and delivered once to the local process
+// log. Rotation is mandatory before any data or management access is allowed.
 
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 
@@ -64,8 +63,11 @@ export function normalizeUsername(name) {
 }
 
 // Attach user/session helpers onto an open db handle (the object returned by
-// openDb). Idempotent: creates the tables and seeds the default admin once.
-export function installUsers(db, { now = () => new Date().toISOString() } = {}) {
+// openDb). Idempotent: existing non-default credentials are never replaced.
+export function installUsers(db, {
+  now = () => new Date().toISOString(),
+  onBootstrap = (password) => console.warn(`[auth] One-time setup: sign in as admin with password: ${password}\n[auth] Change it immediately. Restrict access to this local log; it contains a credential.`),
+} = {}) {
   const sql = db.sql;
   sql.exec(SCHEMA);
 
@@ -121,8 +123,7 @@ export function installUsers(db, { now = () => new Date().toISOString() } = {}) 
     countAdmins() {
       return sql.prepare(`SELECT COUNT(*) AS c FROM users WHERE is_admin = 1`).get().c;
     },
-    // True while any admin still carries the seeded default password (the UI uses
-    // this to show the login-screen hint only when it's actually relevant).
+    // True while any admin requires password rotation (also supports legacy DBs).
     defaultPasswordActive() {
       return sql.prepare(
         `SELECT COUNT(*) AS c FROM users WHERE is_admin = 1 AND must_change_password = 1`
@@ -169,11 +170,19 @@ export function installUsers(db, { now = () => new Date().toISOString() } = {}) 
     },
   };
 
-  // Seed a default admin the first time the app boots with no users, so a fresh
-  // self-hoster can log in right away. Flagged must_change_password so the UI
-  // can prompt them to set a real password.
-  if (api.countUsers() === 0) {
-    api.createUser({ username: 'admin', email: null, password: 'admin', isAdmin: true, mustChangePassword: true });
+  // Replace the predictable credential on first run AND on legacy installations
+  // still carrying the seeded admin/admin. Revoke any legacy default sessions.
+  const legacy = api.getUserByUsername('admin');
+  if (api.countUsers() === 0 || (legacy?.is_admin && legacy.must_change_password && verifyPassword('admin', legacy.password_hash))) {
+    const password = randomBytes(32).toString('base64url');
+    if (legacy) {
+      api.setPassword(legacy.id, password);
+      sql.prepare('UPDATE users SET must_change_password = 1 WHERE id = ?').run(legacy.id);
+      api.deleteUserSessions(legacy.id);
+    } else {
+      api.createUser({ username: 'admin', password, isAdmin: true, mustChangePassword: true });
+    }
+    onBootstrap(password);
   }
 
   return api;

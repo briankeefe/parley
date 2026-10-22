@@ -11,7 +11,10 @@ import { authRouter, attachUser, requireAuth, requirePasswordChanged, sameOrigin
 // rest of the API. `gated` mirrors the production stack (same-origin + password
 // change gate) for the tests that exercise those layers.
 function appWith(db, { trustProxy = false, now, gated = false } = {}) {
-  const users = installUsers(db);
+  const users = installUsers(db, { onBootstrap: () => {} });
+  // Explicit legacy fixture; production now generates unpredictable credentials.
+  users.setPassword(users.getUserByUsername('admin').id, 'admin');
+  db.sql.exec('UPDATE users SET must_change_password = 1');
   const app = express();
   if (trustProxy) app.set('trust proxy', true);
   app.use(express.json());
@@ -97,6 +100,8 @@ test('admin can create a user who can then log in', async () => {
   const db = openDb(':memory:');
   const { base, close } = await listen(appWith(db).app);
   try {
+    const users = installUsers(db, { onBootstrap: () => {} });
+    users.setPassword(users.getUserByUsername('admin').id, 'admin');
     const cookie = cookieOf(await jpost(base, '/api/auth/login', { username: 'admin', password: 'admin' }));
     const created = await jpost(base, '/api/users', { username: 'jane', email: 'jane@x.com', password: 'pw123456' }, cookie);
     assert.equal(created.status, 201);
@@ -127,6 +132,7 @@ test('the last admin cannot be demoted or deleted', async () => {
   const db = openDb(':memory:');
   const { app, users } = appWith(db);
   const admin = users.getUserByUsername('admin');
+  users.setPassword(admin.id, 'admin');
   const { base, close } = await listen(app);
   try {
     const cookie = cookieOf(await jpost(base, '/api/auth/login', { username: 'admin', password: 'admin' }));
@@ -144,6 +150,7 @@ test('admin password reset for another user revokes their sessions', async () =>
   const db = openDb(':memory:');
   const { app, users } = appWith(db);
   const jane = users.createUser({ username: 'jane', password: 'pw123456' });
+  users.setPassword(users.getUserByUsername('admin').id, 'admin');
   const { base, close } = await listen(app);
   try {
     const janeCookie = cookieOf(await jpost(base, '/api/auth/login', { username: 'jane', password: 'pw123456' }));
@@ -342,7 +349,7 @@ test('requireAdmin denies an unauthenticated request when the auth stack ran', a
   const db = openDb(':memory:');
   const { base, close } = await listen(appWith(db, { gated: true }).app);
   try {
-    // No cookie → attachUser ran (authResolved) but req.user is null. An admin
+    // No cookie → attachUser ran but req.user is null. An admin
     // route must 403 (fail closed), not fall through. /users is admin-gated.
     const res = await fetch(`${base}/api/users`);
     // requireAuth returns 401 first here; the point is it is NOT a 200. Assert

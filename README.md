@@ -189,7 +189,7 @@ Parley's bot connects **out** to Discord over a websocket, so it needs **no publ
 - **Cloud LLM (default):** only the final transcript *text* is sent to Gemini/OpenAI. Easiest, cheapest, great quality.
 - **Fully offline:** run [Ollama](https://ollama.com) (on the host or another box) and select it in Settings. Nothing ever leaves your network.
 
-> **Security:** the dashboard requires a **login**. On first run it seeds a default `admin` / `admin` account — sign in, and Parley **requires you to set a new password before the dashboard unlocks** (the rest of the API is gated until you do). Admins can add more users (username + optional email + password) and reset passwords; any user can change their own. Sensitive operations (API keys, Discord credentials, bot/sidecar control, deleting or merging meetings) are **admin-only**. Login is rate-limited against brute force, requests are same-origin-checked (CSRF), sessions are httpOnly cookies (marked `Secure` over https) that are revoked when a password changes, and passwords are scrypt-hashed (8-char minimum) in the same SQLite db. The server binds `127.0.0.1` by default (and, in Docker, only the host's localhost). To reach it from another machine, tunnel over SSH (`ssh -L 3000:127.0.0.1:3000 user@host`) or front it with a reverse proxy + TLS. Do **not** expose port 3000 to the internet directly.
+> **Security:** the dashboard is **instance-admin-only**, not a Discord member portal. First run creates `admin` with a cryptographically random setup password printed **once in the local server startup log** (`docker compose logs bot` for Docker). Restrict access to these logs. Sign in and set a new password: all data and management APIs, including user creation/reset/demotion, remain locked until rotation. Upgrades also replace a still-flagged legacy `admin` / `admin` credential and revoke its sessions; already-changed passwords are preserved. Admins can access **every guild**, transcript, export, search result, recording control, and setting; grant this role only to trusted instance operators. Non-admin accounts have session/password self-service only, with no guild discovery, data, or controls. Website accounts do **not** map to Discord identities. Sessions use httpOnly cookies (`Secure` over HTTPS), same-origin CSRF checks, login rate limiting, and scrypt password hashes. The server and Docker host port bind localhost by default. Use an SSH tunnel (`ssh -L 3000:127.0.0.1:3000 user@host`) or a TLS reverse proxy; never expose port 3000 directly. See [security boundaries and dependency caveats](docs/security-hardening.md).
 
 ## 📦 Prerequisites
 
@@ -283,7 +283,7 @@ npm start
 
 > `npm start` loads `.env` automatically via Node's `--env-file` flag (Node 20+). If your shell already has empty `DISCORD_TOKEN=` etc., the `.env` values win.
 
-The bot connects to Discord **and** the web dashboard comes up at **<http://127.0.0.1:3000>** (first login `admin` / `admin`; you'll be required to set a new password before the dashboard unlocks). Haven't set a Discord token yet? Open the dashboard and paste it into the first-run wizard — Parley connects and registers its slash commands live, no restart. Run headless (no dashboard) with `WEB_UI=0 npm start`.
+The bot connects to Discord **and** the web dashboard comes up at **<http://127.0.0.1:3000>**. For first login, use `admin` and the one-time random setup password from the local startup log; you must set a new password before data or management unlocks. Haven't set a Discord token yet? Open the dashboard and paste it into the first-run wizard — Parley connects and registers its slash commands live, no restart. Run headless (no dashboard) with `WEB_UI=0 npm start`.
 
 For production, keep both processes alive with a process manager:
 
@@ -418,12 +418,12 @@ For hot-reload UI development, run `npm run web` (the API on :3000) in one
 terminal and `npm run web:dev` (Vite on :5173, proxies `/api` to :3000) in
 another.
 
-**Security:** the UI binds to 127.0.0.1 only and requires a login (default
-`admin` / `admin`; you must set a new password before the dashboard unlocks).
-Sessions are httpOnly cookies (`Secure` over https) that are revoked on password
-change, requests are same-origin-checked (CSRF), login attempts are rate-limited,
-passwords are scrypt-hashed (8-char minimum) in SQLite, and destructive/system
-operations require an admin account. Still, add TLS via a reverse proxy before
+**Security:** the UI binds to 127.0.0.1 by default and requires an instance-admin
+login. First-run credentials are delivered once through the local startup log;
+password rotation is required before any data or management API access.
+Sessions are httpOnly cookies (`Secure` over HTTPS) revoked on password change;
+requests are same-origin-checked, logins rate-limited, passwords scrypt-hashed.
+All guilds and controls share the global admin trust boundary. Add a TLS proxy before
 exposing it beyond localhost. It never returns API keys or the Discord token to
 the browser — those stay in `.env` and only their "is it set?" status is shown.
 

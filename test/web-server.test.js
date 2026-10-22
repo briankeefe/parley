@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:net';
 import { openDb } from '../src/store/db.js';
 import { startWebServer } from '../src/web/server.js';
+import { installUsers } from '../src/store/users.js';
 
 function occupy(port = 0) {
   return new Promise((resolve, reject) => {
@@ -13,13 +14,12 @@ function occupy(port = 0) {
   });
 }
 
-// Log in as the seeded default admin and immediately move off the default
-// password (the API is gated until that happens), returning the fresh session
-// cookie so we can hit the now-protected API in these end-to-end checks.
+// Log in with an explicit setup fixture and rotate before using the protected
+// API, returning the newly issued cookie.
 async function loginCookie(base) {
   const r = await fetch(`${base}/api/auth/login`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password: 'admin' }),
+    body: JSON.stringify({ username: 'admin', password: 'test-bootstrap-password' }),
   });
   assert.equal(r.status, 200);
   let cookie = r.headers.get('set-cookie').split(';')[0];
@@ -36,6 +36,9 @@ async function loginCookie(base) {
 
 test('startWebServer binds 127.0.0.1 and serves api + backfills (authed)', async () => {
   const db = openDb(':memory:');
+  const users = installUsers(db, { onBootstrap: () => {} });
+  users.setPassword(users.getUserByUsername('admin').id, 'test-bootstrap-password');
+  db.sql.exec('UPDATE users SET must_change_password = 1');
   const mId = db.createMeeting({ guildId: 'g1', channelId: 'c', channelName: 'g', startedAt: 'now' });
   db.saveSummary(mId, { actionItems: [{ assignee: 'A', task: 'backfilled' }] }, [], 'test:m');
   const server = await startWebServer({ db, client: null, port: 0 });
@@ -49,7 +52,7 @@ test('startWebServer binds 127.0.0.1 and serves api + backfills (authed)', async
     // The default-password admin is blocked from the data API until it changes.
     const preChange = await fetch(`${base}/api/auth/login`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ username: 'admin', password: 'admin' }),
+      body: JSON.stringify({ username: 'admin', password: 'test-bootstrap-password' }),
     });
     const defCookie = preChange.headers.get('set-cookie').split(';')[0];
     const gated = await fetch(`${base}/api/guilds/g1/todos`, { headers: { cookie: defCookie } });

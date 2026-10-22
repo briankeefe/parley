@@ -58,8 +58,8 @@ export default function Login() {
 
         {defaultPasswordActive && (
           <p className="text-[11px] text-faint text-center leading-relaxed mt-5">
-            First time? The default account is <code className="text-muted">admin</code> / <code className="text-muted">admin</code>.
-            You'll be asked to change it right after you sign in.
+            First time? Sign in as <code className="text-muted">admin</code> using the one-time setup password in the server's local startup log.
+            You'll be required to change it before the dashboard unlocks.
           </p>
         )}
       </div>

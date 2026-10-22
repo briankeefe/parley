@@ -9,6 +9,7 @@ import { apiRouter } from '../src/web/api.js';
 function appWith(db) {
   const app = express();
   app.use(express.json());
+  app.use((req, _res, next) => { req.user = { isAdmin: true }; next(); });
   app.use('/api', apiRouter({ db, client: null }));
   return app;
 }
@@ -30,6 +31,7 @@ function fakeSidecar({ managed = true } = {}) {
 function appWithSidecar(db, sidecar) {
   const app = express();
   app.use(express.json());
+  app.use((req, _res, next) => { req.user = { isAdmin: true }; next(); });
   app.use('/api', apiRouter({ db, client: null, sidecar }));
   return app;
 }
@@ -39,9 +41,7 @@ function appWithSidecar(db, sidecar) {
 function appWithUser(db, user) {
   const app = express();
   app.use(express.json());
-  // Mirror attachUser: set req.authResolved so requireAdmin fails closed for
-  // non-admins (the real server always runs attachUser in front of the router).
-  app.use('/api', (req, _res, next) => { req.authResolved = true; req.user = user; next(); });
+  app.use('/api', (req, _res, next) => { req.user = user; next(); });
   app.use('/api', apiRouter({ db, client: null }));
   return app;
 }
@@ -221,6 +221,7 @@ test('GET /api/guilds merges live client cache with db guilds (no duplicates)', 
 
   const app = express();
   app.use(express.json());
+  app.use((req, _res, next) => { req.user = { isAdmin: true }; next(); });
   app.use('/api', apiRouter({ db, client: stubClient }));
   const { base, close } = await listen(app);
   try {
@@ -298,6 +299,7 @@ test('GET /api/system/status reports bot + connection (managed)', async () => {
   };
   const app = express();
   app.use(express.json());
+  app.use((req, _res, next) => { req.user = { isAdmin: true }; next(); });
   app.use('/api', apiRouter({ db, bot: fakeBot }));
   const { base, close } = await listen(app);
   try {
@@ -332,8 +334,7 @@ test('POST /api/system/bot/:action is rejected when unmanaged', async () => {
   } finally { close(); }
 });
 
-// D3: requireAdmin gates system/provider-key/destructive-meeting routes.
-// PATCH /guilds/:g/config is deliberately NOT gated (stays open to all users).
+// All dashboard data and controls are admin-only.
 test('D3: non-admin user gets 403 on admin-gated routes', async () => {
   const db = openDb(':memory:');
   const id = db.createMeeting({ guildId: 'g1', channelId: 'c', channelName: 'gen', startedAt: 'now' });
@@ -363,11 +364,11 @@ test('D3: non-admin user gets 403 on admin-gated routes', async () => {
     });
     assert.equal(merge.status, 403);
 
-    // Config PATCH is intentionally left open to non-admins.
+    // Recording/configuration changes are admin-only too.
     const cfg = await fetch(`${base}/api/guilds/g1/config`, {
       method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({}),
     });
-    assert.equal(cfg.status, 200);
+    assert.equal(cfg.status, 403);
   } finally { close(); }
 });
 
@@ -387,19 +388,21 @@ test('D3: admin user passes the admin-gated routes (rejected downstream, not by 
   } finally { close(); }
 });
 
-test('D3: no-auth standalone server (no req.user attached) still passes admin routes', async () => {
+test('a bare data router fails closed when authentication middleware is missing', async () => {
   const db = openDb(':memory:');
-  const { base, close } = await listen(appWith(db)); // no req.user middleware at all
+  db.createMeeting({ guildId: 'private', channelId: 'c', channelName: 'Private', startedAt: 'now' });
+  const app = express();
+  app.use('/api', apiRouter({ db }));
+  const { base, close } = await listen(app);
   try {
-    const putKey = await fetch(`${base}/api/providers/nope/key`, {
-      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key: 'x' }),
-    });
-    assert.equal(putKey.status, 400); // reaches the handler, not blocked by requireAdmin
-
-    const botAction = await fetch(`${base}/api/system/bot/start`, { method: 'POST' });
-    assert.equal(botAction.status, 400);
+    for (const path of ['/guilds', '/meetings/1/export', '/guilds/private/config', '/system/status']) {
+      const response = await fetch(`${base}/api${path}`);
+      assert.equal(response.status, 403, path);
+      assert.deepEqual(await response.json(), { error: 'Admin access required.' });
+    }
   } finally { close(); }
 });
+
 
 
 // ── Meeting export (#17) ──────────────────────────────────────────────────────

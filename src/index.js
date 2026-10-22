@@ -37,17 +37,16 @@ if (webEnabled) {
     console.error(`[web] failed to bind ${host}:${port}:`, e.message);
     process.exit(1);
   }
-  // Loud warning if we're reachable off-box while an account still uses the
-  // seeded default password — that combination is a full-takeover risk.
+  // Pending bootstrap or legacy-password rotation still needs operator action.
   if (host !== '127.0.0.1' && host !== 'localhost' && defaultPasswordActive(db)) {
     console.warn(
-      `[web] ⚠ SECURITY: the dashboard is bound to ${host} (not localhost) and an account still uses the\n` +
-      `      default password. Change it immediately, and only expose the dashboard behind a TLS proxy.`
+      `[web] ⚠ SECURITY: the dashboard is bound to ${host} (not localhost) and an account still uses\n` +
+      `      a password requiring rotation. Change it immediately, and only expose the dashboard behind a TLS proxy.`
     );
   }
 }
 
-// True when any admin still carries the seeded default password (must change).
+// True when any admin still requires bootstrap/legacy password rotation.
 function defaultPasswordActive(database) {
   try {
     return database.sql.prepare(

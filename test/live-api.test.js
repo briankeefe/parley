@@ -23,6 +23,7 @@ function fakeBot(sessions = [], client = null) {
 function appWith(db, bot) {
   const app = express();
   app.use(express.json());
+  app.use((req, _res, next) => { req.user = { isAdmin: true }; next(); });
   app.use('/api', apiRouter({ db, bot }));
   return app;
 }

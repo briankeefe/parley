@@ -58,10 +58,10 @@ function PasswordCard({ user, onChanged }) {
   }
 
   return (
-    <Card title="Your password" desc={mustChange ? 'You are using the default password. Set a new one to secure your account.' : 'Change the password for your account.'}>
+    <Card title="Your password" desc={mustChange ? 'Password rotation is required. Set a new one to secure your account.' : 'Change the password for your account.'}>
       {mustChange && (
         <div className="text-sm text-warn bg-warn-soft rounded-sm px-3 py-2">
-          This account still uses the default password. Please change it.
+          This account requires a new password. Please change it.
         </div>
       )}
       <form onSubmit={submit} className="space-y-4">

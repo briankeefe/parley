@@ -132,6 +132,7 @@ test('POST /api/meetings/:id/retry re-summarizes and returns done', async () => 
 
   const app = express();
   app.use(express.json());
+  app.use((req, _res, next) => { req.user = { isAdmin: true }; next(); });
   app.use('/api', apiRouter({ db, client: null }));
   const { base, close } = await listen(app);
   try {
@@ -153,6 +154,7 @@ test('GET /api/commands returns the command catalog', async () => {
   const db = openDb(':memory:');
   const app = express();
   app.use(express.json());
+  app.use((req, _res, next) => { req.user = { isAdmin: true }; next(); });
   app.use('/api', apiRouter({ db, client: null }));
   const { base, close } = await listen(app);
   try {

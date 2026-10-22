@@ -66,7 +66,7 @@ function Shell() {
 // dashboard never gets trapped behind a login it can't satisfy. A transient
 // /auth/me failure shows a retry card rather than failing open.
 function Gate() {
-  const { user, authEnabled, loading, error, refresh } = useAuth();
+  const { user, authEnabled, loading, error, refresh, logout } = useAuth();
   if (loading) return <Spinner />;
   if (error) {
     return (
@@ -80,9 +80,20 @@ function Gate() {
     );
   }
   if (authEnabled && !user) return <Login />;
-  // The API is locked until the seeded default password is changed; force it
+  // The API is locked until mandatory password rotation completes; force it
   // here so the dashboard never mounts against a 403-ing backend.
   if (user?.mustChangePassword) return <ForcePasswordChange />;
+  if (user && !user.isAdmin) {
+    return (
+      <div className="min-h-screen grid place-items-center bg-bg text-ink p-6">
+        <div className="card p-7 max-w-[400px] w-full text-center">
+          <h1 className="font-display text-lg font-extrabold mb-1">Admin access required</h1>
+          <p className="text-sm text-muted mb-5">This dashboard is restricted to instance administrators. Contact your administrator for access.</p>
+          <button onClick={logout} className="btn btn-primary !py-2.5 w-full justify-center">Sign out</button>
+        </div>
+      </div>
+    );
+  }
   return (
     <SystemProvider>
       <Shell />

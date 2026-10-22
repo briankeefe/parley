@@ -38,6 +38,9 @@ function anyGuildUsesSidecar(db) {
 
 export function apiRouter({ db, bot = null, client = null, sidecar = null }) {
   const r = Router();
+  // Every dashboard data/control route is global-admin-only, including future
+  // routes. Website accounts do not imply Discord membership or guild grants.
+  r.use(requireAdmin);
   // The live Discord client may not exist yet (bot starts lazily once creds are
   // set). Always resolve it fresh from the controller so routes pick it up the
   // moment the bot connects, without rebuilding the router. `client` is still
@@ -424,7 +427,7 @@ export function apiRouter({ db, bot = null, client = null, sidecar = null }) {
   r.post('/guilds/:g/meetings/:id/ask', async (req, res) => {
     const id = Number(req.params.id);
     const meeting = db.getMeeting(id);
-    if (!meeting) return res.status(404).json({ error: 'meeting not found' });
+    if (!meeting || meeting.guild_id !== req.params.g) return res.status(404).json({ error: 'meeting not found' });
     const question = (req.body?.question || '').trim();
     if (!question) return res.status(400).json({ error: 'question required' });
     const transcript = db.listUtterances(id).map((u) => `${u.display_name}: ${u.text}`).join('\n');

@@ -3,7 +3,7 @@ import { api } from '../api.js';
 import { useAuth } from '../AuthContext.jsx';
 import { Logo } from '../components/ui.jsx';
 
-// Shown when the signed-in account still uses its seeded default password. The
+// Shown while a bootstrap or legacy account requires password rotation. The
 // backend blocks the rest of the API (403 PASSWORD_CHANGE_REQUIRED) until this
 // is done, so this is a hard gate, not a dismissible nudge.
 export default function ForcePasswordChange() {
@@ -40,7 +40,7 @@ export default function ForcePasswordChange() {
           <h1 className="font-display text-[22px] font-extrabold leading-tight mb-1">Set a new password</h1>
           <p className="text-sm text-muted mb-6">
             {user?.username ? <><code className="text-muted">{user.username}</code> is </> : 'This account is '}
-            using the default password. Choose a new one to secure the dashboard.
+            using a setup password that must be replaced. Choose a new one to secure the dashboard.
           </p>
           <form onSubmit={submit} className="space-y-4">
             <div>
